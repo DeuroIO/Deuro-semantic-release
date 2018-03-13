@@ -126,6 +126,22 @@ test('Wrap "publish" plugin in a function that validate the output of the plugin
   t.regex(error.details, /2/);
 });
 
+test('Wrap "addChannel" plugin in a function that validate the output of the plugin', async t => {
+  const plugin = normalize(
+    'addChannel',
+    {'./plugin-identity': './test/fixtures'},
+    {},
+    './plugin-identity',
+    t.context.logger
+  );
+
+  const error = await t.throws(plugin(2));
+
+  t.is(error.code, 'EADDCHANNELOUTPUT');
+  t.is(error.name, 'SemanticReleaseError');
+  t.regex(error.details, /2/);
+});
+
 test('Plugin is called with "pluginConfig" (omitting "path", adding global config) and input', async t => {
   const pluginFunction = stub().resolves();
   const conf = {path: pluginFunction, conf: 'confValue'};

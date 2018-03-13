@@ -25,28 +25,28 @@ test.serial('Get all commits when there is no last release', async t => {
   const commits = await gitCommits(['First', 'Second']);
 
   // Retrieve the commits with the commits module
-  const result = await getCommits(undefined, 'master', t.context.logger);
+  const result = await getCommits(undefined, 'HEAD', 'master', t.context.logger);
 
   // Verify the commits created and retrieved by the module are identical
   t.is(result.length, 2);
   t.deepEqual(result, commits);
 });
 
-test.serial('Get all commits since gitHead (from lastRelease)', async t => {
+test.serial('Get all commits since "from" sha', async t => {
   // Create a git repository, set the current working directory at the root of the repo
   await gitRepo();
   // Add commits to the master branch
   const commits = await gitCommits(['First', 'Second', 'Third']);
 
   // Retrieve the commits with the commits module, since commit 'First'
-  const result = await getCommits(commits[commits.length - 1].hash, 'master', t.context.logger);
+  const result = await getCommits(commits[commits.length - 1].hash, 'HEAD', 'master', t.context.logger);
 
   // Verify the commits created and retrieved by the module are identical
   t.is(result.length, 2);
   t.deepEqual(result, commits.slice(0, 2));
 });
 
-test.serial('Get all commits since gitHead (from lastRelease) on a detached head repo', async t => {
+test.serial('Get all commits since "from" sha on a detached head repo', async t => {
   // Create a git repository, set the current working directory at the root of the repo
   const repo = await gitRepo();
   // Add commits to the master branch
@@ -55,7 +55,7 @@ test.serial('Get all commits since gitHead (from lastRelease) on a detached head
   await gitDetachedHead(repo, commits[1].hash);
 
   // Retrieve the commits with the commits module, since commit 'First'
-  const result = await getCommits(commits[commits.length - 1].hash, 'master', t.context.logger);
+  const result = await getCommits(commits[commits.length - 1].hash, 'HEAD', 'master', t.context.logger);
 
   // Verify the module retrieved only the commit 'feat: Second' (included in the detached and after 'fix: First')
   t.is(result.length, 1);
@@ -66,14 +66,28 @@ test.serial('Get all commits since gitHead (from lastRelease) on a detached head
   t.truthy(result[0].committer.name);
 });
 
-test.serial('Return empty array if lastRelease.gitHead is the last commit', async t => {
+test.serial('Get all commits between "from" and "to" shas', async t => {
+  // Create a git repository, set the current working directory at the root of the repo
+  await gitRepo();
+  // Add commits to the master branch
+  const commits = await gitCommits(['First', 'Second', 'Third']);
+
+  // Retrieve the commits with the commits module, between commit 'First' and 'Third'
+  const result = await getCommits(commits[commits.length - 1].hash, commits[1].hash, 'master', t.context.logger);
+
+  // Verify the commits created and retrieved by the module are identical
+  t.is(result.length, 1);
+  t.deepEqual(result, commits.slice(1, commits.length - 1));
+});
+
+test.serial('Return empty array if "from" is the last commit', async t => {
   // Create a git repository, set the current working directory at the root of the repo
   await gitRepo();
   // Add commits to the master branch
   const commits = await gitCommits(['First', 'Second']);
 
   // Retrieve the commits with the commits module, since commit 'Second' (therefore none)
-  const result = await getCommits(commits[0].hash, 'master', t.context.logger);
+  const result = await getCommits(commits[0].hash, 'HEAD', 'master', t.context.logger);
 
   // Verify no commit is retrieved
   t.deepEqual(result, []);
@@ -84,7 +98,7 @@ test.serial('Return empty array if there is no commits', async t => {
   await gitRepo();
 
   // Retrieve the commits with the commits module
-  const result = await getCommits(undefined, 'master', t.context.logger);
+  const result = await getCommits(undefined, 'HEAD', 'master', t.context.logger);
 
   // Verify no commit is retrieved
   t.deepEqual(result, []);

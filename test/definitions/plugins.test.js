@@ -47,14 +47,14 @@ test('The "generateNotes" plugin, if defined, must be a single plugin definition
 });
 
 test('The "prepare" plugin, if defined, must be a single or an array of plugins definition', t => {
-  t.false(plugins.verifyRelease.config.validator({}));
-  t.false(plugins.verifyRelease.config.validator({path: null}));
+  t.false(plugins.prepare.config.validator({}));
+  t.false(plugins.prepare.config.validator({path: null}));
 
-  t.true(plugins.verifyRelease.config.validator({path: 'plugin-path.js'}));
-  t.true(plugins.verifyRelease.config.validator());
-  t.true(plugins.verifyRelease.config.validator('plugin-path.js'));
-  t.true(plugins.verifyRelease.config.validator(() => {}));
-  t.true(plugins.verifyRelease.config.validator([{path: 'plugin-path.js'}, 'plugin-path.js', () => {}]));
+  t.true(plugins.prepare.config.validator({path: 'plugin-path.js'}));
+  t.true(plugins.prepare.config.validator());
+  t.true(plugins.prepare.config.validator('plugin-path.js'));
+  t.true(plugins.prepare.config.validator(() => {}));
+  t.true(plugins.prepare.config.validator([{path: 'plugin-path.js'}, 'plugin-path.js', () => {}]));
 });
 
 test('The "publish" plugin is mandatory, and must be a single or an array of plugins definition', t => {
@@ -66,6 +66,17 @@ test('The "publish" plugin is mandatory, and must be a single or an array of plu
   t.true(plugins.publish.config.validator('plugin-path.js'));
   t.true(plugins.publish.config.validator(() => {}));
   t.true(plugins.publish.config.validator([{path: 'plugin-path.js'}, 'plugin-path.js', () => {}]));
+});
+
+test('The "addChannel" plugin, if defined, must be a single or an array of plugins definition', t => {
+  t.false(plugins.addChannel.config.validator({}));
+  t.false(plugins.addChannel.config.validator({path: null}));
+
+  t.true(plugins.addChannel.config.validator({path: 'plugin-path.js'}));
+  t.true(plugins.addChannel.config.validator());
+  t.true(plugins.addChannel.config.validator('plugin-path.js'));
+  t.true(plugins.addChannel.config.validator(() => {}));
+  t.true(plugins.addChannel.config.validator([{path: 'plugin-path.js'}, 'plugin-path.js', () => {}]));
 });
 
 test('The "success" plugin, if defined, must be a single or an array of plugins definition', t => {
@@ -118,6 +129,16 @@ test('The "publish" plugin output, if defined, must be an object', t => {
   t.true(plugins.publish.output.validator());
   t.true(plugins.publish.output.validator(null));
   t.true(plugins.publish.output.validator(''));
+});
+
+test('The "addChannel" plugin output, if defined, must be an object', t => {
+  t.false(plugins.addChannel.output.validator(1));
+  t.false(plugins.addChannel.output.validator('string'));
+
+  t.true(plugins.addChannel.output.validator({}));
+  t.true(plugins.addChannel.output.validator());
+  t.true(plugins.addChannel.output.validator(null));
+  t.true(plugins.addChannel.output.validator(''));
 });
 
 test('The "analyzeCommits" plugin output definition return an existing error code', t => {

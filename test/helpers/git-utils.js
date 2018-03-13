@@ -27,11 +27,11 @@ export async function gitRepo(withRemote, branch = 'master') {
   const dir = tempy.directory();
 
   process.chdir(dir);
-  await execa('git', ['init'].concat(withRemote ? ['--bare'] : []));
+  await execa('git', ['init', ...(withRemote ? ['--bare'] : [])]);
 
   if (withRemote) {
     await initBareRepo(fileUrl(dir), branch);
-    await gitShallowClone(fileUrl(dir));
+    await gitShallowClone(fileUrl(dir), branch);
   } else {
     await gitCheckout(branch);
   }
@@ -211,4 +211,31 @@ export async function gitCommitTag(gitHead) {
  */
 export async function push(repositoryUrl = 'origin', branch = 'master') {
   await execa('git', ['push', '--tags', repositoryUrl, `HEAD:${branch}`]);
+}
+
+/**
+ * Merge a branch into the current one with `git merge`.
+ *
+ * @param {String} ref The ref to merge.
+ */
+export async function merge(ref) {
+  await execa('git', ['merge', '--no-ff', ref]);
+}
+
+/**
+ * Merge a branch into the current one with `git merge --ff`.
+ *
+ * @param {String} ref The ref to merge.
+ */
+export async function mergeFf(ref) {
+  await execa('git', ['merge', '--ff', ref]);
+}
+
+/**
+ * Merge a branch into the current one with `git rebase`.
+ *
+ * @param {String} ref The ref to merge.
+ */
+export async function rebase(ref) {
+  await execa('git', ['rebase', ref]);
 }

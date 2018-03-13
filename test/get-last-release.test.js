@@ -1,10 +1,6 @@
 import test from 'ava';
 import {stub} from 'sinon';
 import getLastRelease from '../lib/get-last-release';
-import {gitRepo, gitCommits, gitTagVersion, gitCheckout} from './helpers/git-utils';
-
-// Save the current working diretory
-const cwd = process.cwd();
 
 test.beforeEach(t => {
   // Stub the logger functions
@@ -12,148 +8,65 @@ test.beforeEach(t => {
   t.context.logger = {log: t.context.log};
 });
 
-test.afterEach.always(() => {
-  // Restore the current working directory
-  process.chdir(cwd);
+test('Get the highest non-prerelease valid tag', t => {
+  const result = getLastRelease(
+    {
+      name: 'master',
+      tags: [
+        {version: '2.0.0', gitTag: 'v2.0.0', gitHead: '222'},
+        {version: '1.0.0', gitTag: 'v1.0.0', gitHead: '111'},
+        {version: '3.0.0-beta.1', gitTag: 'v3.0.0-beta.1@beta', gitHead: '333'},
+      ],
+      type: 'release',
+    },
+    {tagFormat: `v\${version}`},
+    t.context.logger
+  );
+
+  t.deepEqual(result, {version: '2.0.0', gitTag: 'v2.0.0', name: 'v2.0.0', gitHead: '222', channel: undefined});
+  t.deepEqual(t.context.log.args[0], [
+    'Found git tag %s associated with version %s on branch %s',
+    'v2.0.0',
+    '2.0.0',
+    'master',
+  ]);
 });
 
-test.serial('Get the highest non-prerelease valid tag', async t => {
-  // Create a git repository, set the current working directory at the root of the repo
-  await gitRepo();
-  // Create some commits and tags
-  await gitCommits(['First']);
-  await gitTagVersion('foo');
-  const commits = await gitCommits(['Second']);
-  await gitTagVersion('v2.0.0');
-  await gitCommits(['Third']);
-  await gitTagVersion('v1.0.0');
-  await gitCommits(['Fourth']);
-  await gitTagVersion('v3.0');
-  await gitCommits(['Fifth']);
-  await gitTagVersion('v3.0.0-beta.1');
-
-  const result = await getLastRelease(`v\${version}`, t.context.logger);
-
-  t.deepEqual(result, {gitHead: commits[0].hash, gitTag: 'v2.0.0', version: '2.0.0'});
-  t.deepEqual(t.context.log.args[0], ['Found git tag %s associated with version %s', 'v2.0.0', '2.0.0']);
-});
-
-test.serial('Get the highest tag in the history of the current branch', async t => {
-  // Create a git repository, set the current working directory at the root of the repo
-  await gitRepo();
-  // Add commit to the master branch
-  await gitCommits(['First']);
-  // Create the tag corresponding to version 1.0.0
-  // Create the new branch 'other-branch' from master
-  await gitCheckout('other-branch');
-  // Add commit to the 'other-branch' branch
-  await gitCommits(['Second']);
-  // Create the tag corresponding to version 3.0.0
-  await gitTagVersion('v3.0.0');
-  // Checkout master
-  await gitCheckout('master', false);
-  // Add another commit to the master branch
-  const commits = await gitCommits(['Third']);
-  // Create the tag corresponding to version 2.0.0
-  await gitTagVersion('v2.0.0');
-
-  const result = await getLastRelease(`v\${version}`, t.context.logger);
-
-  t.deepEqual(result, {gitHead: commits[0].hash, gitTag: 'v2.0.0', version: '2.0.0'});
-});
-
-test.serial('Match the tag name from the begining of the string', async t => {
-  // Create a git repository, set the current working directory at the root of the repo
-  await gitRepo();
-  const commits = await gitCommits(['First']);
-  await gitTagVersion('prefix/v1.0.0');
-  await gitTagVersion('prefix/v2.0.0');
-  await gitTagVersion('other-prefix/v3.0.0');
-
-  const result = await getLastRelease(`prefix/v\${version}`, t.context.logger);
-
-  t.deepEqual(result, {gitHead: commits[0].hash, gitTag: 'prefix/v2.0.0', version: '2.0.0'});
-});
-
-test.serial('Return empty object if no valid tag is found', async t => {
-  // Create a git repository, set the current working directory at the root of the repo
-  await gitRepo();
-  // Create some commits and tags
-  await gitCommits(['First']);
-  await gitTagVersion('foo');
-  await gitCommits(['Second']);
-  await gitTagVersion('v2.0.x');
-  await gitCommits(['Third']);
-  await gitTagVersion('v3.0');
-
-  const result = await getLastRelease(`v\${version}`, t.context.logger);
+test('Return empty object if no valid tag is found', t => {
+  const result = getLastRelease(
+    {name: 'master', tags: [{version: '3.0.0-beta.1', gitTag: 'v3.0.0-beta.1@beta', gitHead: '111'}], type: 'release'},
+    {tagFormat: `v\${version}`},
+    t.context.logger
+  );
 
   t.deepEqual(result, {});
-  t.is(t.context.log.args[0][0], 'No git tag version found');
+  t.deepEqual(t.context.log.args[0], ['No git tag version found on branch %s', 'master']);
 });
 
-test.serial('Return empty object if no valid tag is found in history', async t => {
-  // Create a git repository, set the current working directory at the root of the repo
-  await gitRepo();
-  await gitCommits(['First']);
-  await gitCheckout('other-branch');
-  await gitCommits(['Second']);
-  await gitTagVersion('v1.0.0');
-  await gitTagVersion('v2.0.0');
-  await gitTagVersion('v3.0.0');
-  await gitCheckout('master', false);
+test('Get the highest non-prerelease valid tag before a certain version', t => {
+  const result = getLastRelease(
+    {
+      name: 'master',
+      channel: undefined,
+      tags: [
+        {version: '2.0.0', gitTag: 'v2.0.0', gitHead: '333'},
+        {version: '1.0.0', gitTag: 'v1.0.0', gitHead: '111'},
+        {version: '2.0.0-beta.1', gitTag: 'v2.0.0-beta.1@beta', gitHead: '222'},
+        {version: '2.1.0', gitTag: 'v2.1.0', gitHead: '444'},
+        {version: '2.1.1', gitTag: 'v2.1.1', gitHead: '555'},
+      ],
+      type: 'release',
+    },
+    {tagFormat: `v\${version}`},
+    t.context.logger,
+    {before: '2.1.0'}
+  );
 
-  const result = await getLastRelease(`v\${version}`, t.context.logger);
-
-  t.deepEqual(result, {});
-  t.is(t.context.log.args[0][0], 'No git tag version found');
-});
-
-test.serial('Get the highest valid tag corresponding to the "tagFormat"', async t => {
-  // Create a git repository, set the current working directory at the root of the repo
-  await gitRepo();
-  // Create some commits and tags
-  const [{hash: gitHead}] = await gitCommits(['First']);
-
-  await gitTagVersion('1.0.0');
-  t.deepEqual(await getLastRelease(`\${version}`, t.context.logger), {
-    gitHead,
-    gitTag: '1.0.0',
-    version: '1.0.0',
-  });
-
-  await gitTagVersion('foo-1.0.0-bar');
-  t.deepEqual(await getLastRelease(`foo-\${version}-bar`, t.context.logger), {
-    gitHead,
-    gitTag: 'foo-1.0.0-bar',
-    version: '1.0.0',
-  });
-
-  await gitTagVersion('foo-v1.0.0-bar');
-  t.deepEqual(await getLastRelease(`foo-v\${version}-bar`, t.context.logger), {
-    gitHead,
-    gitTag: 'foo-v1.0.0-bar',
-    version: '1.0.0',
-  });
-
-  await gitTagVersion('(.+)/1.0.0/(a-z)');
-  t.deepEqual(await getLastRelease(`(.+)/\${version}/(a-z)`, t.context.logger), {
-    gitHead,
-    gitTag: '(.+)/1.0.0/(a-z)',
-    version: '1.0.0',
-  });
-
-  await gitTagVersion('2.0.0-1.0.0-bar.1');
-  t.deepEqual(await getLastRelease(`2.0.0-\${version}-bar.1`, t.context.logger), {
-    gitHead,
-    gitTag: '2.0.0-1.0.0-bar.1',
-    version: '1.0.0',
-  });
-
-  await gitTagVersion('3.0.0-bar.1');
-  t.deepEqual(await getLastRelease(`\${version}-bar.1`, t.context.logger), {
-    gitHead,
-    gitTag: '3.0.0-bar.1',
-    version: '3.0.0',
-  });
+  t.deepEqual(result, {version: '2.0.0', gitTag: 'v2.0.0', name: 'v2.0.0', gitHead: '333', channel: undefined});
+  t.deepEqual(t.context.log.args[0], [
+    'Found git tag %s associated with version %s on branch %s',
+    'v2.0.0',
+    '2.0.0',
+    'master',
+  ]);
 });

@@ -21,7 +21,7 @@ test('Execute each function in series passing the same input', async t => {
 test('With one step, returns the step values rather than an Array ', async t => {
   const step1 = stub().resolves(1);
 
-  const result = await pipeline([step1])(0);
+  const [result] = await pipeline([step1])(0);
 
   t.deepEqual(result, 1);
   t.true(step1.calledWith(0));

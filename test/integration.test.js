@@ -2,7 +2,17 @@ import test from 'ava';
 import {writeJson, readJson} from 'fs-extra';
 import {stub} from 'sinon';
 import execa from 'execa';
-import {gitHead as getGitHead, gitTagHead, gitRepo, gitCommits, gitRemoteTagHead, push} from './helpers/git-utils';
+import {
+  gitHead as getGitHead,
+  gitTagHead,
+  gitRepo,
+  gitCommits,
+  gitRemoteTagHead,
+  push,
+  gitCheckout,
+  merge,
+} from './helpers/git-utils';
+import {npmView} from './helpers/npm-utils';
 import gitbox from './helpers/gitbox';
 import mockServer from './helpers/mockserver';
 import npmRegistry from './helpers/npm-registry';
@@ -101,7 +111,7 @@ test.serial('Release patch, minor and major versions', async t => {
     version: '0.0.0-dev',
     repository: {url: repositoryUrl},
     publishConfig: {registry: npmRegistry.url},
-    release: {success: false, fail: false},
+    release: {branches: ['master', 'next'], success: false, fail: false},
   });
   // Create a npm-shrinkwrap.json file
   await execa('npm', ['shrinkwrap'], {env: testEnv});
@@ -130,7 +140,7 @@ test.serial('Release patch, minor and major versions', async t => {
   let createReleaseMock = await mockServer.mock(
     `/repos/${owner}/${packageName}/releases`,
     {
-      body: {tag_name: `v${version}`, target_commitish: 'master', name: `v${version}`},
+      body: {tag_name: `v${version}`, name: `v${version}`},
       headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}],
     },
     {body: {html_url: `release-url/${version}`}}
@@ -149,9 +159,11 @@ test.serial('Release patch, minor and major versions', async t => {
   t.is((await readJson('./npm-shrinkwrap.json')).version, version);
 
   // Retrieve the published package from the registry and check version and gitHead
-  let [, releasedVersion, releasedGitHead] = /^version = '(.+)'\s+gitHead = '(.+)'$/.exec(
-    (await execa('npm', ['show', packageName, 'version', 'gitHead'], {env: testEnv})).stdout
-  );
+  let {
+    version: releasedVersion,
+    gitHead: releasedGitHead,
+    'dist-tags': {latest: releasedTag},
+  } = await npmView(packageName, testEnv);
   let gitHead = await getGitHead();
   t.is(releasedVersion, version);
   t.is(releasedGitHead, gitHead);
@@ -172,7 +184,7 @@ test.serial('Release patch, minor and major versions', async t => {
   createReleaseMock = await mockServer.mock(
     `/repos/${owner}/${packageName}/releases`,
     {
-      body: {tag_name: `v${version}`, target_commitish: 'master', name: `v${version}`},
+      body: {tag_name: `v${version}`, name: `v${version}`},
       headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}],
     },
     {body: {html_url: `release-url/${version}`}}
@@ -191,9 +203,11 @@ test.serial('Release patch, minor and major versions', async t => {
   t.is((await readJson('./npm-shrinkwrap.json')).version, version);
 
   // Retrieve the published package from the registry and check version and gitHead
-  [, releasedVersion, releasedGitHead] = /^version = '(.+)'\s+gitHead = '(.+)'$/.exec(
-    (await execa('npm', ['show', packageName, 'version', 'gitHead'], {env: testEnv})).stdout
-  );
+  ({
+    version: releasedVersion,
+    gitHead: releasedGitHead,
+    'dist-tags': {latest: releasedTag},
+  } = await npmView(packageName, testEnv));
   gitHead = await getGitHead();
   t.is(releasedVersion, version);
   t.is(releasedGitHead, gitHead);
@@ -214,7 +228,7 @@ test.serial('Release patch, minor and major versions', async t => {
   createReleaseMock = await mockServer.mock(
     `/repos/${owner}/${packageName}/releases`,
     {
-      body: {tag_name: `v${version}`, target_commitish: 'master', name: `v${version}`},
+      body: {tag_name: `v${version}`, name: `v${version}`},
       headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}],
     },
     {body: {html_url: `release-url/${version}`}}
@@ -233,9 +247,11 @@ test.serial('Release patch, minor and major versions', async t => {
   t.is((await readJson('./npm-shrinkwrap.json')).version, version);
 
   // Retrieve the published package from the registry and check version and gitHead
-  [, releasedVersion, releasedGitHead] = /^version = '(.+)'\s+gitHead = '(.+)'$/.exec(
-    (await execa('npm', ['show', packageName, 'version', 'gitHead'], {env: testEnv})).stdout
-  );
+  ({
+    version: releasedVersion,
+    gitHead: releasedGitHead,
+    'dist-tags': {latest: releasedTag},
+  } = await npmView(packageName, testEnv));
   gitHead = await getGitHead();
   t.is(releasedVersion, version);
   t.is(releasedGitHead, gitHead);
@@ -246,7 +262,7 @@ test.serial('Release patch, minor and major versions', async t => {
   await mockServer.verify(verifyMock);
   await mockServer.verify(createReleaseMock);
 
-  /* Major release */
+  /* Major release on next */
   version = '2.0.0';
   verifyMock = await mockServer.mock(
     `/repos/${owner}/${packageName}`,
@@ -256,13 +272,16 @@ test.serial('Release patch, minor and major versions', async t => {
   createReleaseMock = await mockServer.mock(
     `/repos/${owner}/${packageName}/releases`,
     {
-      body: {tag_name: `v${version}`, target_commitish: 'master', name: `v${version}`},
+      body: {tag_name: `v${version}@next`, name: `v${version}`},
       headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}],
     },
     {body: {html_url: `release-url/${version}`}}
   );
 
-  t.log('Commit a breaking change');
+  t.log('Commit a breaking change on next');
+  await gitCheckout('next');
+  await push('origin', 'next');
+  process.env.TRAVIS_BRANCH = 'next';
   await gitCommits(['feat: foo\n\n BREAKING CHANGE: bar']);
   t.log('$ semantic-release');
   ({stdout, code} = await execa(cli, [], {env}));
@@ -275,18 +294,66 @@ test.serial('Release patch, minor and major versions', async t => {
   t.is((await readJson('./npm-shrinkwrap.json')).version, version);
 
   // Retrieve the published package from the registry and check version and gitHead
-  [, releasedVersion, releasedGitHead] = /^version = '(.+)'\s+gitHead = '(.+)'$/.exec(
-    (await execa('npm', ['show', packageName, 'version', 'gitHead'], {env: testEnv})).stdout
-  );
+  ({
+    'dist-tags': {next: releasedTag},
+  } = await npmView(packageName, testEnv));
   gitHead = await getGitHead();
-  t.is(releasedVersion, version);
-  t.is(releasedGitHead, gitHead);
-  t.is(await gitTagHead(`v${version}`), gitHead);
-  t.is(await gitRemoteTagHead(authUrl, `v${version}`), gitHead);
+
+  t.is(releasedTag, version);
+  t.is(await gitTagHead(`v${version}@next`), gitHead);
+  t.is(await gitRemoteTagHead(authUrl, `v${version}@next`), gitHead);
   t.log(`+ released ${releasedVersion} with gitHead ${releasedGitHead}`);
 
   await mockServer.verify(verifyMock);
   await mockServer.verify(createReleaseMock);
+
+  /* Merge next into master */
+  version = '2.0.0';
+  const releaseId = 1;
+  verifyMock = await mockServer.mock(
+    `/repos/${owner}/${packageName}`,
+    {headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}]},
+    {body: {permissions: {push: true}}, method: 'GET'}
+  );
+  const getReleaseMock = await mockServer.mock(
+    `/repos/${owner}/${packageName}/releases/tags/v2.0.0@next`,
+    {headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}]},
+    {body: {id: releaseId}, method: 'GET'}
+  );
+  const updateReleaseMock = await mockServer.mock(
+    `/repos/${owner}/${packageName}/releases/${releaseId}`,
+    {
+      body: {tag_name: `v${version}`, name: `v${version}`, prerelease: false},
+      headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}],
+    },
+    {body: {html_url: `release-url/${version}`}, method: 'PATCH'}
+  );
+
+  t.log('Merge next into master');
+  await gitCheckout('master', false);
+  await merge('next');
+  await push('origin');
+  process.env.TRAVIS_BRANCH = 'master';
+  t.log('$ semantic-release');
+  ({stdout, code} = await execa(cli, [], {env}));
+  t.regex(stdout, new RegExp(`Updated GitHub release: release-url/${version}`));
+  t.regex(stdout, new RegExp(`Add version ${version} to npm registry on dist-tag latest`));
+  t.is(code, 0);
+
+  // Retrieve the published package from the registry and check version and gitHead
+  ({
+    version: releasedVersion,
+    'dist-tags': {latest: releasedTag},
+  } = await npmView(packageName, testEnv));
+
+  t.is(releasedVersion, version);
+  t.is(await gitTagHead(`v${version}`), await gitTagHead(`v${version}@next`));
+  t.is(await gitRemoteTagHead(authUrl, `v${version}`), await gitRemoteTagHead(authUrl, `v${version}@next`));
+  t.log(`+ added ${releasedVersion} to dist-tag ${releasedTag}`);
+
+  await mockServer.verify(verifyMock);
+  await mockServer.verify(getReleaseMock);
+  await mockServer.verify(updateReleaseMock);
 });
 
 test.serial('Exit with 1 if a plugin is not found', async t => {
@@ -409,7 +476,7 @@ test.serial('Allow local releases with "noCi" option', async t => {
   const createReleaseMock = await mockServer.mock(
     `/repos/${owner}/${packageName}/releases`,
     {
-      body: {tag_name: `v${version}`, target_commitish: 'master', name: `v${version}`},
+      body: {tag_name: `v${version}`, name: `v${version}`},
       headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}],
     },
     {body: {html_url: `release-url/${version}`}}
@@ -427,9 +494,7 @@ test.serial('Allow local releases with "noCi" option', async t => {
   t.is((await readJson('./package.json')).version, version);
 
   // Retrieve the published package from the registry and check version and gitHead
-  const [, releasedVersion, releasedGitHead] = /^version = '(.+)'\s+gitHead = '(.+)'$/.exec(
-    (await execa('npm', ['show', packageName, 'version', 'gitHead'], {env: testEnv})).stdout
-  );
+  const {version: releasedVersion, gitHead: releasedGitHead} = await npmView(packageName, testEnv);
 
   const gitHead = await getGitHead();
   t.is(releasedVersion, version);
@@ -482,9 +547,7 @@ test.serial('Pass options via CLI arguments', async t => {
   t.is((await readJson('./package.json')).version, version);
 
   // Retrieve the published package from the registry and check version and gitHead
-  const [, releasedVersion, releasedGitHead] = /^version = '(.+)'\s+gitHead = '(.+)'$/.exec(
-    (await execa('npm', ['show', packageName, 'version', 'gitHead'], {env: testEnv})).stdout
-  );
+  const {version: releasedVersion, gitHead: releasedGitHead} = await npmView(packageName, testEnv);
   const gitHead = await getGitHead();
   t.is(releasedVersion, version);
   t.is(releasedGitHead, gitHead);
@@ -517,7 +580,7 @@ test.serial('Run via JS API', async t => {
   const createReleaseMock = await mockServer.mock(
     `/repos/${owner}/${packageName}/releases`,
     {
-      body: {tag_name: `v${version}`, target_commitish: 'master', name: `v${version}`},
+      body: {tag_name: `v${version}`, name: `v${version}`},
       headers: [{name: 'Authorization', values: [`token ${env.GH_TOKEN}`]}],
     },
     {body: {html_url: `release-url/${version}`}}
@@ -534,9 +597,7 @@ test.serial('Run via JS API', async t => {
   t.is((await readJson('./package.json')).version, version);
 
   // Retrieve the published package from the registry and check version and gitHead
-  const [, releasedVersion, releasedGitHead] = /^version = '(.+)'\s+gitHead = '(.+)'$/.exec(
-    (await execa('npm', ['show', packageName, 'version', 'gitHead'], {env: testEnv})).stdout
-  );
+  const {version: releasedVersion, gitHead: releasedGitHead} = await npmView(packageName, testEnv);
   const gitHead = await getGitHead();
   t.is(releasedVersion, version);
   t.is(releasedGitHead, gitHead);

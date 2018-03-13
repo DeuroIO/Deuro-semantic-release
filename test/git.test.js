@@ -3,6 +3,7 @@ import tempy from 'tempy';
 import {
   gitTagHead,
   isRefInHistory,
+  isRefExists,
   unshallow,
   gitHead,
   repoUrl,
@@ -88,9 +89,25 @@ test.serial('Verify if the commit `sha` is in the direct history of the current 
   const otherCommits = await gitCommits(['Second']);
   await gitCheckout('master', false);
 
-  t.true(await isRefInHistory(commits[0].hash));
-  t.falsy(await isRefInHistory(otherCommits[0].hash));
-  await t.throws(isRefInHistory('non-existant-sha'));
+  t.true(await isRefInHistory(commits[0].hash, 'master'));
+  t.falsy(await isRefInHistory(otherCommits[0].hash, 'master'));
+  t.falsy(await isRefInHistory(otherCommits[0].hash, 'missing-branch'));
+  await t.throws(isRefInHistory('non-existant-sha', 'master'));
+});
+
+test.serial('Verify if a branch exists', async t => {
+  // Create a git repository, set the current working directory at the root of the repo
+  await gitRepo();
+  // Add commits to the master branch
+  await gitCommits(['First']);
+  // Create the new branch 'other-branch' from master
+  await gitCheckout('other-branch');
+  // Add commits to the 'other-branch' branch
+  await gitCommits(['Second']);
+
+  t.true(await isRefExists('master'));
+  t.true(await isRefExists('other-branch'));
+  t.falsy(await isRefExists('next'));
 });
 
 test.serial('Get the commit sha for a given tag or falsy if the tag does not exists', async t => {
