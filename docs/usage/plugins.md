@@ -20,13 +20,13 @@ Default implementation: [@semantic-release/commit-analyzer](https://github.com/s
 
 ### verifyRelease plugin
 
-Responsible for verifying the parameters (version, type, dist-tag etc...) of the release that is about to be published match certain expectations. For example the [cracks plugin](https://github.com/semantic-release/cracks) is able to verify that if a release contains breaking changes, its type must be `major`.
+Responsible for verifying the parameters (version, type, dist-tag etc...) of the release that is about to be published. For example the [cracks plugin](https://github.com/semantic-release/cracks) is able to verify that if a release contains breaking changes, its type must be `major`.
 
 Default implementation: none.
 
 ### generateNotes plugin
 
-Responsible for generating release notes.
+Responsible for generating release notes. If multiple `generateNotes` plugins are defined, the release notes will be the result of the concatenation of plugin output.
 
 Default implementation: [@semantic-release/release-notes-generator](https://github.com/semantic-release/release-notes-generator).
 
