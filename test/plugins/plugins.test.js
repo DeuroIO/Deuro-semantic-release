@@ -11,7 +11,8 @@ const cwd = process.cwd();
 test.beforeEach(t => {
   // Stub the logger functions
   t.context.log = stub();
-  t.context.logger = {log: t.context.log};
+  t.context.success = stub();
+  t.context.logger = {log: t.context.log, success: t.context.success, scope: () => t.context.logger};
 });
 
 test('Export default plugins', t => {
@@ -158,18 +159,15 @@ test('Merge global options with plugin options', async t => {
   t.deepEqual(result.pluginConfig, {localOpt: 'local', globalOpt: 'global', otherOpt: 'locally-defined'});
 });
 
-test('Throw an error if plugins configuration are missing a path for plugin pipeline', t => {
-  const errors = [...t.throws(() => getPlugins({cwd, logger: t.context.logger, options: {verifyConditions: {}}}, {}))];
-
-  t.is(errors[0].name, 'SemanticReleaseError');
-  t.is(errors[0].code, 'EPLUGINCONF');
-});
-
-test('Throw an error if an array of plugin configuration is missing a path for plugin pipeline', t => {
+test('Throw an error if plugins configuration are invalid', t => {
   const errors = [
     ...t.throws(() =>
       getPlugins(
-        {cwd, logger: t.context.logger, options: {verifyConditions: [{path: '@semantic-release/npm'}, {}]}},
+        {
+          cwd,
+          logger: t.context.logger,
+          options: {verifyConditions: {}, analyzeCommits: [], verifyRelease: [{}], generateNotes: [{path: null}]},
+        },
         {}
       )
     ),
@@ -177,4 +175,10 @@ test('Throw an error if an array of plugin configuration is missing a path for p
 
   t.is(errors[0].name, 'SemanticReleaseError');
   t.is(errors[0].code, 'EPLUGINCONF');
+  t.is(errors[1].name, 'SemanticReleaseError');
+  t.is(errors[1].code, 'EPLUGINCONF');
+  t.is(errors[2].name, 'SemanticReleaseError');
+  t.is(errors[2].code, 'EPLUGINCONF');
+  t.is(errors[3].name, 'SemanticReleaseError');
+  t.is(errors[3].code, 'EPLUGINCONF');
 });

@@ -1,5 +1,5 @@
 const process = require('process');
-const {template} = require('lodash');
+const {template, pick} = require('lodash');
 const marked = require('marked');
 const TerminalRenderer = require('marked-terminal');
 const envCi = require('env-ci');
@@ -13,7 +13,7 @@ const getCommits = require('./lib/get-commits');
 const getLastRelease = require('./lib/get-last-release');
 const {extractErrors} = require('./lib/utils');
 const getGitAuthUrl = require('./lib/get-git-auth-url');
-const logger = require('./lib/logger');
+const getLogger = require('./lib/get-logger');
 const {fetch, verifyAuth, isBranchUpToDate, gitHead: getGitHead, tag, push} = require('./lib/git');
 const getError = require('./lib/get-error');
 const {COMMIT_NAME, COMMIT_EMAIL} = require('./lib/definitions/constants');
@@ -42,7 +42,7 @@ async function run(context, plugins) {
 
   if (isCi && isPr && !options.noCi) {
     logger.log("This run was triggered by a pull request and therefore a new version won't be published.");
-    return;
+    return false;
   }
 
   if (ciBranch !== options.branch) {
@@ -53,6 +53,7 @@ async function run(context, plugins) {
     );
     return false;
   }
+  logger.success(`Run automated release from branch ${ciBranch}`);
 
   await verify(context);
 
@@ -63,16 +64,15 @@ async function run(context, plugins) {
   } catch (err) {
     if (!(await isBranchUpToDate(options.branch, {cwd, env}))) {
       logger.log(
-        "The local branch %s is behind the remote one, therefore a new version won't be published.",
-        options.branch
+        `The local branch ${options.branch} is behind the remote one, therefore a new version won't be published.`
       );
       return false;
     }
-    logger.error(`The command "${err.cmd}" failed with the error message %s.`, err.stderr);
+    logger.error(`The command "${err.cmd}" failed with the error message ${err.stderr}.`);
     throw getError('EGITNOPERMISSION', {options});
   }
 
-  logger.log('Run automated release from branch %s', options.branch);
+  logger.success(`Allowed to push to the Git repository`);
 
   await plugins.verifyConditions(context);
 
@@ -85,7 +85,7 @@ async function run(context, plugins) {
 
   if (!nextRelease.type) {
     logger.log('There are no relevant changes, so no new version is released.');
-    return;
+    return false;
   }
   context.nextRelease = nextRelease;
   nextRelease.version = getNextVersion(context);
@@ -95,35 +95,36 @@ async function run(context, plugins) {
 
   if (options.dryRun) {
     const notes = await plugins.generateNotes(context);
-    logger.log('Release note for version %s:\n', nextRelease.version);
+    logger.log(`Release note for version ${nextRelease.version}:`);
     if (notes) {
-      logger.stdout(`${marked(notes)}\n`);
+      context.stdout.write(marked(notes));
     }
   } else {
     nextRelease.notes = await plugins.generateNotes(context);
     await plugins.prepare(context);
 
     // Create the tag before calling the publish plugins as some require the tag to exists
-    logger.log('Create tag %s', nextRelease.gitTag);
     await tag(nextRelease.gitTag, {cwd, env});
     await push(options.repositoryUrl, options.branch, {cwd, env});
+    logger.success(`Created tag ${nextRelease.gitTag}`);
 
     context.releases = await plugins.publish(context);
 
     await plugins.success(context);
 
-    logger.log('Published release: %s', nextRelease.version);
+    logger.success(`Published release ${nextRelease.version}`);
   }
-  return true;
+
+  return pick(context, ['lastRelease', 'commits', 'nextRelease', 'releases']);
 }
 
-function logErrors({logger}, err) {
+function logErrors({logger, stderr}, err) {
   const errors = extractErrors(err).sort(error => (error.semanticRelease ? -1 : 0));
   for (const error of errors) {
     if (error.semanticRelease) {
-      logger.log(`%s ${error.message}`, error.code);
+      logger.error(`${error.code} ${error.message}`);
       if (error.details) {
-        logger.stderr(`${marked(error.details)}\n`);
+        stderr.write(marked(error.details));
       }
     } else {
       logger.error('An error occurred while running semantic-release: %O', error);
@@ -142,10 +143,14 @@ async function callFail(context, plugins, error) {
   }
 }
 
-module.exports = async (opts, {cwd = process.cwd(), env = process.env} = {}) => {
-  const context = {cwd, env, logger};
-  context.logger.log(`Running %s version %s`, pkg.name, pkg.version);
-  const {unhook} = hookStd({silent: false}, hideSensitive(context.env));
+module.exports = async (opts = {}, {cwd = process.cwd(), env = process.env, stdout, stderr} = {}) => {
+  const {unhook} = hookStd(
+    {silent: false, streams: [process.stdout, process.stderr, stdout, stderr].filter(Boolean)},
+    hideSensitive(env)
+  );
+  const context = {cwd, env, stdout: stdout || process.stdout, stderr: stderr || process.stderr};
+  context.logger = getLogger(context);
+  context.logger.log(`Running ${pkg.name} version ${pkg.version}`);
   try {
     const {plugins, options} = await getConfig(context, opts);
     context.options = options;

@@ -105,13 +105,11 @@ After running the tests the command `semantic-release` will execute the followin
   - [CI configurations](docs/recipes/README.md)
   - [Package managers and languages](docs/recipes/README.md)
 - Developer guide
+  - [JavaScript API](docs/developer-guide/js-api.md)
   - [Plugins](docs/developer-guide/plugin.md)
   - [Shareable configuration](docs/developer-guide/shareable-configuration.md)
-- Resources
-  - [Videos](docs/resources.md#videos)
-  - [Articles](docs/resources.md#articles)
-  - [Tutorials](docs/resources.md#tutorials)
 - Support
+  - [Resources](docs/support/resources.md)
   - [Frequently Asked Questions](docs/support/FAQ.md)
   - [Troubleshooting](docs/support/troubleshooting.md)
   - [Node version requirement](docs/support/node-version.md)

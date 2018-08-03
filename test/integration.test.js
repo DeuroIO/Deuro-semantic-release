@@ -16,11 +16,9 @@ const requireNoCache = proxyquire.noPreserveCache();
 
 // Environment variables used with semantic-release cli (similar to what a user would setup)
 const env = {
+  ...npmRegistry.authEnv,
   GH_TOKEN: gitbox.gitCredential,
   GITHUB_URL: mockServer.url,
-  NPM_EMAIL: 'integration@test.com',
-  NPM_USERNAME: 'integration',
-  NPM_PASSWORD: 'suchsecure',
   TRAVIS: 'true',
   CI: 'true',
   TRAVIS_BRANCH: 'master',
@@ -29,9 +27,9 @@ const env = {
 // Environment variables used only for the local npm command used to do verification
 const testEnv = {
   ...process.env,
+  ...npmRegistry.authEnv,
   npm_config_registry: npmRegistry.url,
-  NPM_EMAIL: 'integration@test.com',
-  LEGACY_TOKEN: Buffer.from(`${process.env.NPM_USERNAME}:${process.env.NPM_PASSWORD}`, 'utf8').toString('base64'),
+  LEGACY_TOKEN: Buffer.from(`${env.NPM_USERNAME}:${env.NPM_PASSWORD}`, 'utf8').toString('base64'),
 };
 
 const cli = require.resolve('../bin/semantic-release');
@@ -467,6 +465,10 @@ test('Run via JS API', async t => {
     version: '0.0.0-dev',
     repository: {url: repositoryUrl},
     publishConfig: {registry: npmRegistry.url},
+    release: {
+      fail: false,
+      success: false,
+    },
   });
 
   /* Initial release */
@@ -488,7 +490,7 @@ test('Run via JS API', async t => {
   t.log('Commit a feature');
   await gitCommits(['feat: Initial commit'], {cwd});
   t.log('$ Call semantic-release via API');
-  await semanticRelease({fail: false, success: false}, {cwd, env});
+  await semanticRelease(undefined, {cwd, env, stdout: {write: () => {}}, stderr: {write: () => {}}});
 
   // Verify package.json and has been updated
   t.is((await readJson(path.resolve(cwd, 'package.json'))).version, version);
@@ -552,9 +554,9 @@ test('Log errors inheriting SemanticReleaseError and exit with 1', async t => {
   t.log('Commit a feature');
   await gitCommits(['feat: Initial commit'], {cwd});
   t.log('$ semantic-release');
-  const {stdout, code} = await execa(cli, [], {env, cwd, reject: false});
+  const {stderr, code} = await execa(cli, [], {env, cwd, reject: false});
   // Verify the type and message are logged
-  t.regex(stdout, /EINHERITED Inherited error/);
+  t.regex(stderr, /EINHERITED Inherited error/);
   t.is(code, 1);
 });
 
@@ -570,13 +572,13 @@ test('Exit with 1 if missing permission to push to the remote repository', async
   await gitCommits(['feat: Initial commit'], {cwd});
   await gitPush('origin', 'master', {cwd});
   t.log('$ semantic-release');
-  const {stdout, code} = await execa(
+  const {stderr, code} = await execa(
     cli,
     ['--repository-url', 'http://user:wrong_pass@localhost:2080/git/unauthorized.git'],
     {env: {...env, GH_TOKEN: 'user:wrong_pass'}, cwd, reject: false}
   );
   // Verify the type and message are logged
-  t.regex(stdout, /EGITNOPERMISSION/);
+  t.regex(stderr, /EGITNOPERMISSION/);
   t.is(code, 1);
 });
 
