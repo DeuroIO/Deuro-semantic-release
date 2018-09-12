@@ -27,7 +27,7 @@ Usage:
     .option('verify-conditions', {...stringList, group: 'Plugins'})
     .option('analyze-commits', {type: 'string', group: 'Plugins'})
     .option('verify-release', {...stringList, group: 'Plugins'})
-    .option('generate-notes', {type: 'string', group: 'Plugins'})
+    .option('generate-notes', {...stringList, group: 'Plugins'})
     .option('prepare', {...stringList, group: 'Plugins'})
     .option('publish', {...stringList, group: 'Plugins'})
     .option('success', {...stringList, group: 'Plugins'})
@@ -57,9 +57,9 @@ Usage:
     }
     await require('.')(opts);
     return 0;
-  } catch (err) {
-    if (err.name !== 'YError') {
-      stderr.write(hideSensitive(env)(util.inspect(err, {colors: true})));
+  } catch (error) {
+    if (error.name !== 'YError') {
+      stderr.write(hideSensitive(env)(util.inspect(error, {colors: true})));
     }
     return 1;
   }
