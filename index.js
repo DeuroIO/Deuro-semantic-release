@@ -59,14 +59,18 @@ async function run(context, plugins) {
   options.repositoryUrl = await getGitAuthUrl(context);
 
   try {
-    await verifyAuth(options.repositoryUrl, options.branch, {cwd, env});
-  } catch (error) {
-    if (!(await isBranchUpToDate(options.branch, {cwd, env}))) {
-      logger.log(
-        `The local branch ${options.branch} is behind the remote one, therefore a new version won't be published.`
-      );
-      return false;
+    try {
+      await verifyAuth(options.repositoryUrl, options.branch, {cwd, env});
+    } catch (error) {
+      if (!(await isBranchUpToDate(options.branch, {cwd, env}))) {
+        logger.log(
+          `The local branch ${options.branch} is behind the remote one, therefore a new version won't be published.`
+        );
+        return false;
+      }
+      throw error;
     }
+  } catch (error) {
     logger.error(`The command "${error.cmd}" failed with the error message ${error.stderr}.`);
     throw getError('EGITNOPERMISSION', {options});
   }
@@ -92,14 +96,14 @@ async function run(context, plugins) {
 
   await plugins.verifyRelease(context);
 
+  nextRelease.notes = await plugins.generateNotes(context);
+
   if (options.dryRun) {
-    const notes = await plugins.generateNotes(context);
     logger.log(`Release note for version ${nextRelease.version}:`);
-    if (notes) {
-      context.stdout.write(marked(notes));
+    if (nextRelease.notes) {
+      context.stdout.write(marked(nextRelease.notes));
     }
   } else {
-    nextRelease.notes = await plugins.generateNotes(context);
     await plugins.prepare(context);
 
     // Create the tag before calling the publish plugins as some require the tag to exists
